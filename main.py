@@ -2,12 +2,9 @@ import numpy as np
 
 from calcium_kinetics import (
     Procesamiento,
-    ModeloCinetico
+    ModeloCinetico,
+    Analizador
 )
-
-# ==========================================
-# FASE 1: PROCESAMIENTO EXPERIMENTAL
-# ==========================================
 
 procesamiento = Procesamiento(
     "data/raw/transientph7-33.csv"
@@ -16,9 +13,6 @@ procesamiento = Procesamiento(
 procesamiento.limpiar_calcio()
 procesamiento.construir_interpolador()
 
-# ==========================================
-# FASE 2: MODELO CINÉTICO DE TROPONINA C
-# ==========================================
 
 troponina = ModeloCinetico(
     procesamiento=procesamiento,
@@ -29,10 +23,6 @@ troponina = ModeloCinetico(
 )
 
 resultado = troponina.resolver()
-
-# ==========================================
-# RESULTADOS
-# ==========================================
 
 print("\n--- RESULTADOS DE TROPONINA C ---")
 
@@ -50,3 +40,18 @@ print(
     f"Máximo calcio unido: "
     f"{np.max(troponina.calcio_unido):.6f} µM"
 )
+
+analizador = Analizador(procesamiento)
+# Graficar interpolación PCHIP
+analizador.graficar_interpolador()
+
+# Graficar derivada
+analizador.graficar_derivada(t_destacado=10.0)
+
+# Graficar área bajo la curva
+auc = analizador.graficar_integracion(
+    t0=0.0,
+    tf=56.2
+)
+
+print(f"AUC del calcio libre: {auc:.6f} µM·ms")
