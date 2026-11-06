@@ -1,29 +1,52 @@
+import numpy as np
 
-from calcium_kinetics.core import Procesamiento
+from calcium_kinetics import (
+    Procesamiento,
+    ModeloCinetico
+)
 
+# ==========================================
+# FASE 1: PROCESAMIENTO EXPERIMENTAL
+# ==========================================
 
 procesamiento = Procesamiento(
     "data/raw/transientph7-33.csv"
 )
 
-# 2. Limpiar calcio
 procesamiento.limpiar_calcio()
-
-# 3. Construir interpolador
 procesamiento.construir_interpolador()
 
-# 4. Evaluar calcio en 10 ms
-calcio_10ms = procesamiento.evaluar_calcio(10.0)
+# ==========================================
+# FASE 2: MODELO CINÉTICO DE TROPONINA C
+# ==========================================
 
-# 5. Calcular derivada en 10 ms
-derivada_10ms = procesamiento.derivada_interpolador(10.0)
-
-# 6. Calcular exposición acumulada
-auc = procesamiento.area_bajo_curva(
-    procesamiento.tiempo[0],
-    procesamiento.tiempo[-1]
+troponina = ModeloCinetico(
+    procesamiento=procesamiento,
+    kon=0.12,
+    koff=0.12,
+    S_total=240.0,
+    SCa_inicial=0.0
 )
 
-print("Calcio a 10 ms:", calcio_10ms, "µM")
-print("Derivada a 10 ms:", derivada_10ms, "µM/ms")
-print("Exposición acumulada:", auc, "µM·ms")
+resultado = troponina.resolver()
+
+# ==========================================
+# RESULTADOS
+# ==========================================
+
+print("\n--- RESULTADOS DE TROPONINA C ---")
+
+print(
+    f"Calcio unido inicial: "
+    f"{troponina.calcio_unido[0]:.6f} µM"
+)
+
+print(
+    f"Calcio unido final: "
+    f"{troponina.calcio_unido[-1]:.6f} µM"
+)
+
+print(
+    f"Máximo calcio unido: "
+    f"{np.max(troponina.calcio_unido):.6f} µM"
+)
