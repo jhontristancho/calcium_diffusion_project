@@ -1,57 +1,120 @@
 import numpy as np
 
-from calcium_kinetics import (
-    Procesamiento,
+from calcium_kinetics.procesamiento import Procesamiento
+from calcium_kinetics.modelo_cinetico import (
     ModeloCinetico,
-    Analizador
+    PARAMETROS_AMORTIGUADORES
+)
+from calcium_kinetics.recapturacion import Recapturacion
+from calcium_kinetics.analizador import Analizador
+
+
+# ============================================================
+# CONFIGURACIÓN GENERAL
+# ============================================================
+
+RUTA_DATOS = "data/raw/transientph7-33.csv"
+
+
+# ============================================================
+# ETAPA 1. PROCESAMIENTO EXPERIMENTAL
+# ============================================================
+
+print("\n========== ETAPA 1: PROCESAMIENTO ==========")
+
+procesamiento = Procesamiento(RUTA_DATOS)
+
+assert procesamiento.calcio_limpio is not None
+assert procesamiento._hermite is not None
+
+print(f"Número de datos: {len(procesamiento.tiempo)}")
+print(f"Calcio máximo: {np.max(procesamiento.calcio_limpio):.6f} µM")
+
+auc = procesamiento.area_bajo_curva(
+    procesamiento.tiempo[0],
+    procesamiento.tiempo[-1]
 )
 
-procesamiento = Procesamiento(
-    "data/raw/transientph7-33.csv"
+print(f"Área bajo la curva: {auc:.6f} µM·ms")
+print("Procesamiento verificado correctamente.")
+
+
+# ============================================================
+# ETAPA 2. MODELOS CINÉTICOS DE AMORTIGUADORES (DEFINICIÓN)
+# ============================================================
+
+print("\n========== ETAPA 2: AMORTIGUADORES ==========")
+
+# Se declara el diccionario 'amortiguadores' en el ámbito global de main.py
+amortiguadores = {}
+
+for nombre in PARAMETROS_AMORTIGUADORES:
+    print(f"\nResolviendo amortiguador: {nombre}")
+
+    modelo = ModeloCinetico(
+        procesamiento=procesamiento,
+        amortiguador=nombre
+    )
+
+    solucion = modelo.resolver()
+
+    # Verificar límites físicos
+    assert np.all(modelo.calcio_unido >= -1e-7)
+    assert np.all(modelo.calcio_unido <= modelo.S_total + 1e-7)
+
+    # Almacenar en el diccionario
+    amortiguadores[nombre] = modelo
+
+    print(f"Calcio unido final: {modelo.calcio_unido[-1]:.6f} µM")
+    print(f"Calcio unido máximo: {np.max(modelo.calcio_unido):.6f} µM")
+
+print("\nTodos los amortiguadores fueron resueltos correctamente.")
+
+
+# ============================================================
+# ETAPA 3. TRANSPORTE ACTIVO SERCA Y HOMEOSTASIS (DEFINICIÓN)
+# ============================================================
+
+print("\n========== ETAPA 3: RECAPTURACIÓN SERCA ==========")
+
+# Se declara la variable 'serca' en el ámbito global de main.py
+serca = Recapturacion(
+    Vmax=2.5,
+    Km=0.44,
+    n_hill=2.1,
+    Ca_reposo=0.06
 )
 
-procesamiento.limpiar_calcio()
-procesamiento.construir_interpolador()
+print(f"Vmax: {serca.Vmax} µM/ms")
+print(f"Km: {serca.Km} µM")
+print(f"Coeficiente Hill: {serca.n_hill}")
+print(f"Calcio de reposo: {serca.Ca_reposo} µM")
+print(f"Fuga pasiva: {serca.J_leak:.10f} µM/ms")
+
+# Pruebas de consistencia de la bomba
+flujo_reposo = serca.evaluar_flujo_neto(serca.Ca_reposo)
+assert np.isclose(flujo_reposo, 0.0, atol=1e-12)
+
+flujo_km = serca.evaluar_flujo_bomba(serca.Km)
+assert np.isclose(flujo_km, serca.Vmax / 2.0)
+
+print("Modelo SERCA verificado correctamente.")
 
 
-troponina = ModeloCinetico(
+# ============================================================
+# ETAPA 4. INTEGRACIÓN Y MENÚ INTERACTIVO CON EL ANALIZADOR
+# ============================================================
+
+print("\n========== ETAPA 4: ANALIZADOR ==========")
+
+# Ahora 'procesamiento', 'amortiguadores' y 'serca' están 100% definidos
+analizador = Analizador(
     procesamiento=procesamiento,
-    kon=0.12,
-    koff=0.12,
-    S_total=240.0,
-    SCa_inicial=0.0
+    buffers=amortiguadores,
+    flujos={"SERCA": serca}
 )
 
-resultado = troponina.resolver()
+print("Analizador conectado con Procesamiento, Buffers y SERCA correctamente.")
 
-print("\n--- RESULTADOS DE TROPONINA C ---")
-
-print(
-    f"Calcio unido inicial: "
-    f"{troponina.calcio_unido[0]:.6f} µM"
-)
-
-print(
-    f"Calcio unido final: "
-    f"{troponina.calcio_unido[-1]:.6f} µM"
-)
-
-print(
-    f"Máximo calcio unido: "
-    f"{np.max(troponina.calcio_unido):.6f} µM"
-)
-
-analizador = Analizador(procesamiento)
-# Graficar interpolación PCHIP
-analizador.graficar_interpolador()
-
-# Graficar derivada
-analizador.graficar_derivada(t_destacado=10.0)
-
-# Graficar área bajo la curva
-auc = analizador.graficar_integracion(
-    t0=0.0,
-    tf=56.2
-)
-
-print(f"AUC del calcio libre: {auc:.6f} µM·ms")
+# Iniciar simulación e interfaz interactiva
+analizador.menu_interactivo()

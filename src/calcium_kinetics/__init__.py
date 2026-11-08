@@ -5,5 +5,6 @@ from .analizador import Analizador
 __all__ = [
     "Procesamiento",
     "ModeloCinetico",
-    "Analizador"
+    "Analizador",
+    "Recapturacion"
 ]

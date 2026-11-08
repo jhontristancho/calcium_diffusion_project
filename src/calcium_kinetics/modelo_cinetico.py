@@ -1,13 +1,34 @@
 import numpy as np
 from scipy.integrate import solve_ivp
 from .procesamiento import Procesamiento
+
+# Parámetros cinéticos de los amortiguadores.
+# Las unidades de tiempo del modelo son milisegundos (ms).
+
+PARAMETROS_AMORTIGUADORES = {
+    "Troponina C": {
+        "kon": 0.12,
+        "koff": 0.12,
+        "S_total": 240.0
+    },
+
+    "Parvalbumina": {
+        "kon": 0.25,
+        "koff": 0.001,
+        "S_total": 380.0
+    },
+
+    "Mag-Fluo-4": {
+        "kon": 0.01,
+        "koff": 1.65,
+        "S_total": 229.1,
+        "Kd_reportado": 1.65e5
+    }
+}
 class ModeloCinetico:
+
     """
-    Modelo de unión reversible de calcio a un amortiguador proteico.
-
-    Resuelve:
-    d[SCa]/dt = kon * Ca(t) * (S_total - [SCa]) - koff * [SCa]
-
+    modelo de union del calcio a un amortiguador proteico.
     Unidades:
         Ca y SCa: µM
         kon: µM⁻¹ ms⁻¹
@@ -15,35 +36,54 @@ class ModeloCinetico:
         tiempo: ms
     """
 
+
     def __init__(
         self,
         procesamiento,
-        kon,
-        koff,
-        S_total,
-        SCa_inicial=0.0
+        kon=None,
+        koff=None,
+        S_total=None,
+        SCa_inicial=0.0,
+        amortiguador=None
     ):
-
-        # Guardar la referencia al procesamiento experimental
         self.procesamiento = procesamiento
 
-        # Guardar los parámetros cinéticos
+        # Cargar parámetros automáticamente si se indica un amortiguador.
+        if amortiguador is not None:
+            if amortiguador not in PARAMETROS_AMORTIGUADORES:
+                raise ValueError(
+                    f"Amortiguador desconocido: {amortiguador}. "
+                    f"Opciones disponibles: {list(PARAMETROS_AMORTIGUADORES)}"
+                )
+
+            parametros = PARAMETROS_AMORTIGUADORES[amortiguador]
+
+            kon = parametros["kon"]
+            koff = parametros["koff"]
+            S_total = parametros["S_total"]
+
+        # Comprobar que se hayan proporcionado todos los parámetros.
+        if kon is None or koff is None or S_total is None:
+            raise ValueError(
+                "Debes proporcionar kon, koff y S_total, "
+                "o indicar el nombre del amortiguador."
+            )
+
         self.kon = float(kon)
         self.koff = float(koff)
         self.S_total = float(S_total)
         self.SCa_inicial = float(SCa_inicial)
 
-        # Validar los parámetros
+        self.amortiguador = amortiguador
+
         self.validar_parametros()
 
-        # Comprobar que exista el interpolador de calcio
         if self.procesamiento._hermite is None:
             raise ValueError(
                 "Primero debes construir el interpolador PCHIP "
                 "en Procesamiento."
             )
 
-        # Inicializar resultados
         self.solucion = None
         self.tiempo = None
         self.calcio_unido = None
