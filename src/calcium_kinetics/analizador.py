@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from scipy.integrate import cumulative_trapezoid
 
 from calcium_kinetics.procesamiento import Procesamiento
-from calcium_kinetics.modelo_cinetico import ModeloCinetico
+from calcium_kinetics.modelo_cinetico import ModeloCinetico, ModeloCineticoCompetitivo
 from calcium_kinetics.recapturacion import Recapturacion
 
 
@@ -23,30 +23,96 @@ class Analizador:
     def __init__(
         self,
         procesamiento: Procesamiento,
-        buffers: dict[str, ModeloCinetico] | None = None,
+        buffers: dict[
+            str,
+            ModeloCinetico | ModeloCineticoCompetitivo
+        ] | None = None,
         flujos: dict[str, Recapturacion] | None = None
     ):
+
+        # --------------------------------------------------
+        # 1. Validar el objeto de procesamiento
+        # --------------------------------------------------
+
         if procesamiento is None:
-            raise AnalizadorError("Se requiere una instancia válida de Procesamiento.")
-        
+            raise AnalizadorError(
+                "Se requiere una instancia válida de Procesamiento."
+            )
+
+        if not isinstance(procesamiento, Procesamiento):
+            raise TypeError(
+                "procesamiento debe ser una instancia de Procesamiento."
+            )
+
         self.procesamiento = procesamiento
+
+        # --------------------------------------------------
+        # 2. Comprobar que exista el interpolador PCHIP
+        # --------------------------------------------------
 
         if getattr(self.procesamiento, "_hermite", None) is None:
             raise ValueError(
-                "Primero debes construir el interpolador PCHIP en Procesamiento."
+                "Primero debes construir el interpolador PCHIP "
+                "en Procesamiento."
             )
 
-        self.buffers: dict[str, ModeloCinetico] = dict(buffers) if buffers is not None else {}
-        self.flujos: dict[str, Recapturacion] = dict(flujos) if flujos is not None else {}
-        
-        # Estructura jerárquica de resultados
-        self.resultados: dict[str, dict] = {
+        # --------------------------------------------------
+        # 3. Copiar y validar los amortiguadores
+        # --------------------------------------------------
+
+        self.buffers = dict(buffers) if buffers is not None else {}
+
+        for nombre, modelo in self.buffers.items():
+
+            if not isinstance(nombre, str) or not nombre.strip():
+                raise ValueError(
+                    "Cada amortiguador debe tener un nombre válido."
+                )
+
+            if not isinstance(
+                modelo,
+                (ModeloCinetico, ModeloCineticoCompetitivo)
+            ):
+                raise TypeError(
+                    f"El amortiguador '{nombre}' no es una instancia "
+                    "de ModeloCinetico ni ModeloCineticoCompetitivo."
+                )
+
+            if modelo.procesamiento is not self.procesamiento:
+                raise ValueError(
+                    f"El amortiguador '{nombre}' está asociado "
+                    "a otro objeto Procesamiento."
+                )
+
+        # --------------------------------------------------
+        # 4. Copiar y validar los transportadores
+        # --------------------------------------------------
+
+        self.flujos = dict(flujos) if flujos is not None else {}
+
+        for nombre, flujo in self.flujos.items():
+
+            if not isinstance(nombre, str) or not nombre.strip():
+                raise ValueError(
+                    "Cada flujo debe tener un nombre válido."
+                )
+
+            if not isinstance(flujo, Recapturacion):
+                raise TypeError(
+                    f"El flujo '{nombre}' debe ser una instancia "
+                    "de Recapturacion."
+                )
+
+        # --------------------------------------------------
+        # 5. Inicializar la estructura de resultados
+        # --------------------------------------------------
+
+        self.resultados: dict[str, object] = {
             "tiempo": np.array([]),
             "calcio_libre": np.array([]),
             "buffers": {},
             "flujos": {}
         }
-
     def agregar_buffer(self, nombre: str, buffer: ModeloCinetico) -> None:
         """Agrega o reemplaza un objeto ModeloCinetico en el diccionario."""
         if not isinstance(buffer, ModeloCinetico):
