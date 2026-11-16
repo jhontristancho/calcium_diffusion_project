@@ -3,14 +3,28 @@ from scipy.integrate import solve_ivp
 from .procesamiento import Procesamiento
 
 CONFIGURACION_BUFFERS = {
-
-    # 1. Troponina C: sitios reguladores, unión simple Ca2+
+        # 1. Troponina C reguladora: competencia Ca2+ / H+
     "Troponina C (Reguladora)": {
-        "tipo": "simple",
-        "kon": 0.12,
-        "koff": 0.12,
-        "S_total": 240.0
+        "tipo": "competitivo",
+
+        # Especie A: Calcio
+        "kon_a": 0.12,
+        "koff_a": 0.12,
+
+        # Especie B: Protones
+        "kon_b": 100.0,
+        "koff_b": 31.6228,
+
+        # Sitios de unión
+        "sitios_totales": 240.0,
+
+        # La concentración de H+ se calcula según el pH
+        "conc_b_dependiente_pH": True,
+
+        # Calcio de reposo
+        "conc_a_reposo": 0.06
     },
+
 
     # 2. Parvalbúmina: competencia Ca2+ / Mg2+
     "Parvalbumina": {
@@ -172,7 +186,7 @@ class ModeloCinetico:
 
         return [dSCa_dt]
 
-    def resolver(self, rtol=1e-6, atol=1e-9):
+    def resolver(self, rtol=1e-6, atol=1e-9, verbose=False):
         """
         Resuelve la EDO utilizando el método implícito Radau.
         """
@@ -220,10 +234,13 @@ class ModeloCinetico:
                 "La solución supera la concentración total "
                 "de sitios de unión."
             )
+        if verbose:
+            print("Integración cinética completada correctamente.")
+            print(f"Método numérico: {solucion.message}")
+            print(f"Número de evaluaciones: {solucion.nfev}")
+            
 
-        print("Integración cinética completada correctamente.")
-        print(f"Método numérico: {solucion.message}")
-        print(f"Número de evaluaciones: {solucion.nfev}")
+ 
 
         return solucion
 class ModeloCineticoCompetitivo:
@@ -459,7 +476,7 @@ class ModeloCineticoCompetitivo:
 
         return [dsa_dt, dsb_dt]
 
-    def resolver(self, rtol=1e-6, atol=1e-9):
+    def resolver(self, rtol=1e-6, atol=1e-9, verbose=False):
         """
         Resuelve las dos EDOs acopladas mediante solve_ivp.
         """
@@ -531,12 +548,13 @@ class ModeloCineticoCompetitivo:
         # Guardar objeto completo de solución
         self.solucion = solucion
 
-        print(
-            "Integración cinética competitiva "
-            "completada correctamente."
-        )
-        print(f"Método numérico: {solucion.message}")
-        print(f"Número de evaluaciones: {solucion.nfev}")
+        if verbose:
+            print(
+                "Integración cinética competitiva "
+                "completada correctamente."
+            )
+            print(f"Método numérico: {solucion.message}")
+            print(f"Número de evaluaciones: {solucion.nfev}")
 
         return solucion
     
@@ -562,17 +580,57 @@ class ModeloCineticoCompetitivo:
             "tiempo": self.tiempo.copy()
         }
 
-def crear_diccionario_buffers(procesamiento):
+def crear_diccionario_buffers(procesamiento, pH=7.33):
     """
-    Construye todos los modelos cinéticos a partir de las
-    configuraciones y de una instancia de Procesamiento.
+    Construye los modelos cinéticos a partir de CONFIGURACION_BUFFERS.
+
+    Parámetros
+    ----------
+    procesamiento:
+        Objeto Procesamiento que contiene el calcio experimental
+        y su interpolador PCHIP.
+
+    pH:
+        pH de la condición experimental. Se utiliza para calcular
+        la concentración libre de H+ cuando corresponda.
+
+    Retorna
+    -------
+    dict:
+        Diccionario con los modelos cinéticos construidos.
     """
+
+    # --------------------------------------------------------
+    # 1. Validar el pH
+    # --------------------------------------------------------
+
+    pH = float(pH)
+
+    if not np.isfinite(pH):
+        raise ValueError("El pH debe ser un valor finito.")
+
+    # --------------------------------------------------------
+    # 2. Calcular la concentración de protones
+    # --------------------------------------------------------
+
+    # 10^(-pH) proporciona mol/L.
+    # Multiplicamos por 1e6 para convertir a micromolar.
+
+    concentracion_H = (10.0 ** (-pH)) * 1e6
+
+    # --------------------------------------------------------
+    # 3. Construir los amortiguadores
+    # --------------------------------------------------------
 
     buffers = {}
 
     for nombre, parametros in CONFIGURACION_BUFFERS.items():
 
         tipo = parametros["tipo"]
+
+        # ====================================================
+        # MODELOS DE UNIÓN SIMPLE
+        # ====================================================
 
         if tipo == "simple":
 
@@ -583,20 +641,41 @@ def crear_diccionario_buffers(procesamiento):
                 S_total=parametros["S_total"]
             )
 
+        # ====================================================
+        # MODELOS DE UNIÓN COMPETITIVA
+        # ====================================================
+
         elif tipo == "competitivo":
+
+            # Comprobar si la concentración de la especie B
+            # depende del pH.
+
+            if parametros.get("conc_b_dependiente_pH", False):
+
+                conc_b = concentracion_H
+
+            else:
+
+                conc_b = parametros["conc_b_libre"]
 
             buffers[nombre] = ModeloCineticoCompetitivo(
                 procesamiento=procesamiento,
+
                 kon_a=parametros["kon_a"],
                 koff_a=parametros["koff_a"],
+
                 kon_b=parametros["kon_b"],
                 koff_b=parametros["koff_b"],
+
                 sitios_totales=parametros["sitios_totales"],
-                conc_b_libre=parametros["conc_b_libre"],
+
+                conc_b_libre=conc_b,
+
                 conc_a_reposo=parametros["conc_a_reposo"]
             )
 
         else:
+
             raise ValueError(
                 f"Tipo de amortiguador desconocido: {tipo}"
             )
