@@ -13,16 +13,16 @@ def main() -> None:
     ruta_datos = ROOT / "data" / "raw"
 
     experimentos = {
-        "transientph7-33.csv (pH 7.33 | Condición Fisiológica Basal)": Analizador.desde_experimento(
+        "transientph7-33.csv": Analizador.desde_experimento(
             ruta_csv=ruta_datos / "transientph7-33.csv",
             pH=7.33,
         ),
-        "transientph6-5.csv  (pH 6.50 | Condición de Acidosis Muscular)": Analizador.desde_experimento(
+        "transientph6-5.csv": Analizador.desde_experimento(
             ruta_csv=ruta_datos / "transientph6-5.csv",
             pH=6.50,
         ),
     }
-
+    print(" \n elije con que archivo quieres trabajar: \n")
     Analizador.ejecutar_sesion_interactiva(experimentos)
 
 

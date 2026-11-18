@@ -600,27 +600,12 @@ def crear_diccionario_buffers(procesamiento, pH=7.33):
         Diccionario con los modelos cinéticos construidos.
     """
 
-    # --------------------------------------------------------
-    # 1. Validar el pH
-    # --------------------------------------------------------
-
     pH = float(pH)
 
     if not np.isfinite(pH):
         raise ValueError("El pH debe ser un valor finito.")
 
-    # --------------------------------------------------------
-    # 2. Calcular la concentración de protones
-    # --------------------------------------------------------
-
-    # 10^(-pH) proporciona mol/L.
-    # Multiplicamos por 1e6 para convertir a micromolar.
-
     concentracion_H = (10.0 ** (-pH)) * 1e6
-
-    # --------------------------------------------------------
-    # 3. Construir los amortiguadores
-    # --------------------------------------------------------
 
     buffers = {}
 

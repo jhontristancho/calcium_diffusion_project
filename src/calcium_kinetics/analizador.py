@@ -14,15 +14,13 @@ from calcium_kinetics.recapturacion import Recapturacion
 
 
 class AnalizadorError(Exception):
-    """Excepción personalizada para errores dentro del módulo Analizador."""
+    """exceprcion para errores"""
     pass
 
 
 class Analizador:
     """
-    Orquesta la simulación del transitorio de calcio citosólico,
-    coordinando amortiguadores pasivos (1 y 2 cationes), recaptación activa
-    (SERCA1a), calibración estocástica Log-Normal y consulta interactiva.
+    Orquesta toda la simulacion 
     """
 
     def __init__(
@@ -37,23 +35,19 @@ class Analizador:
             raise TypeError("procesamiento debe ser una instancia válida de Procesamiento.")
         if getattr(procesamiento, "_hermite", None) is None:
             raise ValueError("El objeto Procesamiento no tiene un interpolador PCHIP construido.")
-
         self.procesamiento = procesamiento
         self.pH = float(pH) if pH is not None else None
         self.nombre_archivo = nombre_archivo
-
         self.buffers = dict(buffers) if buffers else {}
         for nombre, modelo in self.buffers.items():
             if not isinstance(modelo, (ModeloCinetico, ModeloCineticoCompetitivo)):
                 raise TypeError(f"'{nombre}' debe ser ModeloCinetico o ModeloCineticoCompetitivo.")
             if modelo.procesamiento is not self.procesamiento:
                 raise ValueError(f"'{nombre}' está vinculado a otra instancia de Procesamiento.")
-
         self.flujos = dict(flujos) if flujos else {}
         for nombre, flujo in self.flujos.items():
             if not isinstance(flujo, Recapturacion):
                 raise TypeError(f"'{nombre}' debe ser una instancia de Recapturacion.")
-
         self.resultados: dict[str, object] = {
             "tiempo": np.array([]),
             "calcio_libre": np.array([]),
@@ -61,11 +55,9 @@ class Analizador:
             "flujos": {},
         }
         self.historial_calibraciones: dict[str, dict] = {}
-
     @property
     def _etiqueta_exp(self) -> str:
         return f"{self.nombre_archivo} (pH = {self.pH:.2f})" if self.pH is not None else self.nombre_archivo
-
     @classmethod
     def desde_experimento(
         cls,
@@ -76,11 +68,10 @@ class Analizador:
         n_hill: float = 2.1,
         Ca_reposo: float = 0.06,
     ) -> "Analizador":
-        """Carga un CSV experimental, construye sus componentes según el pH y simula el sistema."""
+        """Carga un CSV experimental"""
         ruta = Path(ruta_csv)
         if not ruta.exists():
-            raise FileNotFoundError(f"No se encontró el archivo experimental: {ruta}")
-
+            raise FileNotFoundError(f"no hay el archivo el archivo experimental: {ruta}")#eto me esta generando dudas
         proc = Procesamiento(str(ruta))
         instancia = cls(
             procesamiento=proc,
@@ -91,23 +82,16 @@ class Analizador:
         )
         instancia.simular_sistema_completo()
         return instancia
-
-    # ============================================================
-    # SIMULACIÓN Y CALIBRACIÓN ESTOCÁSTICA
-    # ============================================================
-
     def simular_sistema_completo(self) -> dict:
-        """Integra todos los amortiguadores pasivos y evalúa los flujos de recaptación."""
+        """integra todo, amortiguadores y recapturacion"""
         tiempos = np.copy(self.procesamiento.tiempo)
         ca_libre = self.procesamiento.evaluar_calcio(tiempos)
-
         self.resultados = {
             "tiempo": tiempos,
             "calcio_libre": ca_libre,
             "buffers": {},
             "flujos": {},
         }
-
         for nombre, modelo in self.buffers.items():
             modelo.resolver()
             if isinstance(modelo, ModeloCineticoCompetitivo):
@@ -249,12 +233,8 @@ class Analizador:
         self.historial_calibraciones[nombre_buffer] = salida
         return salida
 
-    # ============================================================
-    # VISUALIZACIÓN GRÁFICA (DESACOPLADA POR ESCALA)
-    # ============================================================
-
     @staticmethod
-    def _sincronizar_eje_porcentaje(ax, s_total: float, etiqueta: str = "Ocupación (%)") -> None:
+    def _sincronizar_eje_porcentaje(ax, s_total: float, etiqueta: str = "Ocupación (%)") -> None: #esto es para las graficas
         """Agrega un eje derecho sincronizado en porcentaje respecto a s_total."""
         ax.relim()
         ax.autoscale_view()
@@ -341,19 +321,16 @@ class Analizador:
             ax = axes[0] if np.max(datos["calcio_unido"]) > 25.0 else axes[1]
             ax.plot(t, datos["calcio_unido"], lw=2.2, label=nombre)
 
-        axes[0].set_title("1. Amortiguadores Proteicos Principales (TnC y Parvalbúmina)")
-        axes[1].set_title("2. Amortiguadores Rápidos de Baja Unión e Indicador (ATP y Mag-Fluo-4)")
-        axes[1].set_xlabel("Tiempo (ms)")
-
+        axes[0].set_title("amortiguadores principales (TnC y Parvalbúmina)")
+        axes[1].set_title("amortiguadores rapidos de baja union(ATP y Mag-Fluo-4)")
+        axes[1].set_xlabel("tiempo (ms)")
         for ax, linthresh in zip(axes, (1.0, 0.1)):
             ax.set_ylabel(r"$[\mathrm{SCa}]$ ($\mu\mathrm{M}$)")
             ax.set_yscale("symlog", linthresh=linthresh) if escala_log else ax.set_ylim(bottom=0)
             ax.grid(True, ls=":", alpha=0.6)
             ax.legend(loc="upper right")
-
         plt.tight_layout(rect=[0, 0, 1, 0.96])
         plt.show()
-
     def graficar_ocupacion_buffers(self) -> None:
         """
         Desglosa la ocupación porcentual (%) en 4 paneles con escalas independientes:
@@ -364,10 +341,8 @@ class Analizador:
         """
         t = self.resultados["tiempo"]
         buffers = self.resultados["buffers"]
-
         fig, axes = plt.subplots(4, 1, figsize=(11, 13), sharex=True)
         fig.suptitle(f"Ocupación Porcentual de Sitios por Especie — {self._etiqueta_exp}", fontsize=13, fontweight="bold")
-
         # Panel 1: Proteínas Ca2+
         for nombre, datos in buffers.items():
             frac_ca = (
@@ -382,8 +357,6 @@ class Analizador:
         axes[0].set_ylim(0, 85)
         axes[0].grid(True, ls=":", alpha=0.6)
         axes[0].legend(loc="upper right")
-
-        # Panel 2: Mag-Fluo-4 vs ATP Citosólico en doble eje independiente
         ax_atp = axes[1].twinx()
         lineas_p2 = []
         for nombre, datos in buffers.items():
@@ -406,8 +379,6 @@ class Analizador:
         axes[1].grid(True, ls=":", alpha=0.6)
         if lineas_p2:
             axes[1].legend(lineas_p2, [l.get_label() for l in lineas_p2], loc="upper right")
-
-        # Panel 3: Protones H+ en su propia escala
         for nombre, datos in buffers.items():
             if datos["tipo"] == "competitivo" and datos["nombre_especie_b"] == "H+":
                 axes[2].plot(
@@ -423,8 +394,6 @@ class Analizador:
         axes[2].set_ylim(bottom=0)
         axes[2].grid(True, ls=":", alpha=0.6)
         axes[2].legend(loc="lower right")
-
-        # Panel 4: Magnesio Mg2+
         for nombre, datos in buffers.items():
             if datos["tipo"] == "competitivo" and datos["nombre_especie_b"] == "Mg2+":
                 axes[3].plot(
@@ -452,7 +421,6 @@ class Analizador:
         """
         if nombre_buffer not in self.resultados["buffers"]:
             raise AnalizadorError(f"El amortiguador '{nombre_buffer}' no existe.")
-
         t = self.resultados["tiempo"]
         b_data = self.resultados["buffers"][nombre_buffer]
         s_tot = b_data["sitios_totales"]
@@ -574,9 +542,7 @@ class Analizador:
         masa_1 = float(ana_basal.resultados["flujos"]["SERCA1a"]["masa_acumulada"][-1])
         masa_2 = float(ana_acido.resultados["flujos"]["SERCA1a"]["masa_acumulada"][-1])
 
-        print("\n======================================================================")
-        print(" COMPARATIVA CUANTITATIVA: FISIOLÓGICO (pH 7.33) vs ACIDOSIS (pH 6.50)")
-        print("======================================================================")
+        print(" COMPARATIVA CUANTITATIVA: normal (pH 7.33) vs acidosis (pH 6.50)")
         print(f"Pico [Ca2+] libre         : {ca_max_1:.4f} µM  -->  {ca_max_2:.4f} µM")
         print(
             f"Ca2+-TnC Reguladora máx   : {np.max(tnc_1['calcio_unido']):.4f} µM "
@@ -591,7 +557,7 @@ class Analizador:
         print(f"Masa recapturada SERCA1a  : {masa_1:.4f} µM  -->  {masa_2:.4f} µM")
 
         fig, axes = plt.subplots(3, 1, figsize=(11, 11), sharex=True)
-        fig.suptitle("Comparativa Biofísica: Fisiológico (pH 7.33) vs. Acidosis (pH 6.50)", fontsize=14, fontweight="bold")
+        fig.suptitle("Comparativa Biofísica: normal (pH 7.33) vs. acidosis (pH 6.50)", fontsize=14, fontweight="bold")
 
         axes[0].plot(ana_basal.resultados["tiempo"], ana_basal.resultados["calcio_libre"], "b-", lw=2, label="pH 7.33 (Basal)")
         axes[0].plot(ana_acido.resultados["tiempo"], ana_acido.resultados["calcio_libre"], "r--", lw=2, label="pH 6.50 (Acidosis)")
@@ -616,18 +582,12 @@ class Analizador:
         plt.tight_layout(rect=[0, 0, 1, 0.96])
         plt.show()
 
-    # ============================================================
-    # INTERFAZ DE CONSULTA INTERACTIVA
-    # ============================================================
-
     @classmethod
     def ejecutar_sesion_interactiva(cls, experimentos: dict[str, "Analizador"]) -> None:
         """Selector principal de experimentos y comparativas."""
         claves = list(experimentos.keys())
         while True:
-            print("\n=================================================================")
-            print("   SISTEMA DE ANÁLISIS BIOFÍSICO DE DINÁMICA DE CALCIO (Ca2+)")
-            print("=================================================================")
+            print("   mi pequeño programa de analisis, version inicial ")
             for idx, etiqueta in enumerate(claves, 1):
                 print(f"  {idx}. {etiqueta}")
             idx_comp = len(claves) + 1
@@ -636,7 +596,7 @@ class Analizador:
                 print(f"  {idx_comp}. Comparar {claves[0]} vs {claves[1]} (Efecto H+)")
             print(f"  {idx_salir}. Salir")
 
-            opcion = input(f"\nSeleccione una opción (1-{idx_salir}): ").strip()
+            opcion = input(f"\nseleccione una opción (1-{idx_salir}): ").strip()
 
             if opcion.isdigit() and 1 <= int(opcion) <= len(claves):
                 if not experimentos[claves[int(opcion) - 1]].menu_interactivo(permitir_cambio=True):
@@ -647,17 +607,15 @@ class Analizador:
                 print("\nSesión finalizada.")
                 break
             else:
-                print("⚠️ Opción no válida. Intente de nuevo.")
+                print("Opcion no valida. presinone lo que es ")
 
     def menu_interactivo(self, permitir_cambio: bool = False) -> bool:
         """Menú completo de consultas numéricas, calibración y gráficas seleccionables."""
         while True:
-            print("\n-----------------------------------------------------------------")
-            print(f" MENÚ DE CONSULTA — {self._etiqueta_exp}")
-            print("-----------------------------------------------------------------")
-            print(" [CONSULTA DE DATOS, CONSTANTES Y CALIBRACIÓN]")
-            print("  1. Señal experimental ([Ca2+] libre, [H+] ambiental, dCa/dt, AUC)")
-            print("  2. Tabla resumen de todos los amortiguadores (Ca2+, H+, Mg2+ y libres)")
+            print(f" menu:  — {self._etiqueta_exp}")
+            print(" consulta de datos: ")
+            print("  1. datos de entrada y un poco de su analisis ([Ca2+] libre, [H+] ambiental, dCa/dt, AUC)")
+            print("  2. tabla resumen delos amortiguadores (Ca2+, H+, Mg2+ y libres)")
             print("  3. Inspeccionar un amortiguador en detalle (kon, koff, Kd)")
             print("  4. Transporte activo SERCA1a (Vmax, Km, n_Hill, J_leak y masa)")
             print("  5. Calibración estocástica Log-Normal (ejecutar y ver constantes)")
