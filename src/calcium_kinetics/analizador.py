@@ -481,7 +481,6 @@ class Analizador:
         fig.suptitle(f"Transporte Activo de Recaptación — {self._etiqueta_exp}", fontsize=13, fontweight="bold")
 
         for nombre, f_data in self.resultados["flujos"].items():
-            axes[0].plot(t, f_data["flujo_bomba"], ls="--", color="gray", lw=1.6, label=f"J_bomba {nombre}")
             axes[0].plot(t, f_data["flujo_neto"], color="crimson", lw=2.2, label=f"J_neto {nombre}")
             axes[1].plot(t, f_data["masa_acumulada"], color="teal", lw=2.3, label=f"Masa acumulada {nombre}")
 
